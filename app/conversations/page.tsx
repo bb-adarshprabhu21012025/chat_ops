@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MessageSquare, Search, Calendar, Clock, ChevronRight, Filter } from "lucide-react"
 import Link from "next/link"
-
+import { Plus } from "lucide-react"
 interface Conversation {
   id: string
   title: string
@@ -96,6 +96,7 @@ export default function ConversationsPage() {
   const startIndex = (currentPage - 1) * itemsPerPage
   const paginatedConversations = filteredConversations.slice(startIndex, startIndex + itemsPerPage)
 
+  
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":

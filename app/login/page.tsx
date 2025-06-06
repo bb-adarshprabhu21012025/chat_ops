@@ -29,7 +29,7 @@ export default function LoginPage() {
       JSON.stringify({
         id: "1",
         username: username || "demo-user",
-        email: "demo@company.com",
+        email: "adarsh.b@bigbasket.com",
         role: "DevOps Engineer",
       }),
     )
