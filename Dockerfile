@@ -2,7 +2,7 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files 
 COPY package.json pnpm-lock.yaml ./
 
 # Set environment and install dependencies
