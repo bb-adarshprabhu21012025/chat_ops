@@ -12,7 +12,6 @@ import Link from "next/link"
 const navigation = [
   { name: "Home", href: "/", icon: Home },
   { name: "Conversations", href: "/conversations", icon: MessageSquare },
-  { name: "Tickets", href: "/tickets", icon: Ticket },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

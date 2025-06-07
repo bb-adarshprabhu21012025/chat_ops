@@ -28,8 +28,8 @@ export default function LoginPage() {
       "chatops-user",
       JSON.stringify({
         id: "1",
-        username: username || "demo-user",
-        email: "adarsh.b@bigbasket.com",
+        username: "jhon.doe",
+        email: "john.doe@example.com",
         role: "DevOps Engineer",
       }),
     )

@@ -1,14 +1,54 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import AppLayout from "@/components/app-layout"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { MessageSquare, Search, Calendar, Clock, ChevronRight, Filter } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  MessageSquare,
+  Search,
+  Calendar,
+  Clock,
+  ChevronRight,
+  Filter,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+
+// API Configuration
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://hqa-svc.bigbasket.com/jira/api/v1"
+
+interface APIResponse {
+  success: boolean
+  message: string
+  data: ConversationData[]
+}
+
+interface ConversationData {
+  conversation_id: number
+  email_id: string
+  jira_id: string
+  status_of_jira: string
+  priority: string
+  jenkins_job_id: number
+  conversation: {
+    topic: string
+    summary: string
+  }
+  status_of_conversation: string
+  template_id: number
+  em_approval_status: boolean
+  elt_approval_status: boolean
+  data_approval_status: boolean
+  security_approval_status: boolean
+  all_approval_final_status: boolean
+}
+
 interface Conversation {
   id: string
   title: string
@@ -17,77 +57,136 @@ interface Conversation {
   messageCount: number
   status: "active" | "completed" | "error"
   summary: string
+  priority: string
+  jiraId?: string
+  emailId: string
+  module?: string
+  parameters: any
 }
 
-const mockConversations: Conversation[] = [
-  {
-    id: "conv-001",
-    title: "Kafka Topic Creation - prod-events",
-    createdAt: new Date("2024-01-15T10:30:00"),
-    lastActivity: new Date("2024-01-15T10:45:00"),
-    messageCount: 8,
-    status: "completed",
-    summary: "Successfully created Kafka topic for production events processing",
-  },
-  {
-    id: "conv-002",
-    title: "Service Restart - payment-api",
-    createdAt: new Date("2024-01-15T09:15:00"),
-    lastActivity: new Date("2024-01-15T09:30:00"),
-    messageCount: 12,
-    status: "completed",
-    summary: "Restarted payment API service after memory leak detection",
-  },
-  {
-    id: "conv-003",
-    title: "App Deployment - user-dashboard v2.1.0",
-    createdAt: new Date("2024-01-15T08:00:00"),
-    lastActivity: new Date("2024-01-15T08:45:00"),
-    messageCount: 15,
-    status: "active",
-    summary: "Ongoing deployment of user dashboard to staging environment",
-  },
-  {
-    id: "conv-004",
-    title: "Database Migration - user_profiles",
-    createdAt: new Date("2024-01-14T16:20:00"),
-    lastActivity: new Date("2024-01-14T17:10:00"),
-    messageCount: 20,
-    status: "error",
-    summary: "Database migration failed due to constraint violations",
-  },
-  {
-    id: "conv-005",
-    title: "Scale Service - notification-worker",
-    createdAt: new Date("2024-01-14T14:30:00"),
-    lastActivity: new Date("2024-01-14T14:35:00"),
-    messageCount: 6,
-    status: "completed",
-    summary: "Scaled notification worker service from 3 to 8 replicas",
-  },
-  {
-    id: "conv-006",
-    title: "SSL Certificate Renewal",
-    createdAt: new Date("2024-01-14T11:00:00"),
-    lastActivity: new Date("2024-01-14T11:20:00"),
-    messageCount: 10,
-    status: "completed",
-    summary: "Renewed SSL certificates for api.company.com",
-  },
-]
+// Helper to render parameters as nested bullet list
+function renderParameters(obj: any, level = 0): React.ReactNode {
+  if (typeof obj !== "object" || obj === null) {
+    return <span>{String(obj)}</span>
+  }
+  return (
+    <ul style={{ paddingLeft: level * 16 }} className="list-disc list-inside text-sm text-gray-700">
+      {Object.entries(obj).map(([key, value]) => (
+        <li key={key}>
+          <strong>{key}:</strong>{" "}
+          {typeof value === "object" && value !== null ? renderParameters(value, level + 1) : String(value)}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// Transform API data to internal Conversation object
+const transformConversationData = (data: ConversationData): Conversation => ({
+  id: data.conversation_id.toString(),
+  title: data.conversation.topic,
+  createdAt: new Date(), // API doesn't provide dates
+  lastActivity: new Date(),
+  messageCount: 0,
+  status: data.status_of_conversation.toLowerCase() as "active" | "completed" | "error",
+  summary: data.conversation.summary,
+  priority: data.priority,
+  jiraId: data.jira_id,
+  emailId: data.email_id,
+  module: data.conversation.topic,
+  parameters: {
+    jenkinsJobId: data.jenkins_job_id,
+    jiraStatus: data.status_of_jira,
+    approvals: {
+      em: data.em_approval_status,
+      elt: data.elt_approval_status,
+      data: data.data_approval_status,
+      security: data.security_approval_status,
+      final: data.all_approval_final_status
+    }
+  }
+})
+
+// Fetch conversations from API
+const fetchConversations = async (params?: { email_id?: string; conversation_id?: string }): Promise<Conversation[]> => {
+  try {
+    let url = `${API_BASE_URL}/conversations`
+    
+    // Add query parameters if provided
+    if (params) {
+      const queryParams = new URLSearchParams()
+      if (params.email_id) queryParams.append('email_id', params.email_id)
+      if (params.conversation_id) queryParams.append('conversation_id', params.conversation_id)
+      
+      const queryString = queryParams.toString()
+      if (queryString) {
+        url += `?${queryString}`
+      }
+    }
+
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('Failed to fetch conversations')
+    const data: ConversationData[] = await response.json()
+    return data.map(transformConversationData)
+  } catch (error) {
+    console.error('Error fetching conversations:', error)
+    throw error
+  }
+}
 
 export default function ConversationsPage() {
-  const [conversations] = useState<Conversation[]>(mockConversations)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [refreshing, setRefreshing] = useState(false)
 
   const itemsPerPage = 5
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      loadConversations()
+    }
+  }, [])
+  const storedUser = localStorage.getItem("chatops-user")
+  const email = storedUser ? JSON.parse(storedUser).email : "john.joe@example.com"
+
+  const loadConversations = async () => {
+    try {
+      setError(null)
+      setLoading(true)
+
+
+      const conversationsData = await fetchConversations({ email_id: email })
+      setConversations(conversationsData)
+      console.log(conversationsData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load conversations")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      const conversationsData = await fetchConversations({ email_id: email })
+      setConversations(conversationsData)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to refresh conversations")
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const filteredConversations = conversations.filter((conv) => {
     const matchesSearch =
       conv.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      conv.summary.toLowerCase().includes(searchTerm.toLowerCase())
+      conv.emailId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (conv.jiraId && conv.jiraId.toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = statusFilter === "all" || conv.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -96,7 +195,6 @@ export default function ConversationsPage() {
   const startIndex = (currentPage - 1) * itemsPerPage
   const paginatedConversations = filteredConversations.slice(startIndex, startIndex + itemsPerPage)
 
-  
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
@@ -118,8 +216,38 @@ export default function ConversationsPage() {
     }
   }
 
+  const getPriorityBadge = (priority: string) => {
+    const colors = {
+      Low: "bg-gray-100 text-gray-800",
+      Medium: "bg-yellow-100 text-yellow-800",
+      High: "bg-orange-100 text-orange-800",
+      Critical: "bg-red-100 text-red-800",
+    }
+
+    return (
+      <Badge variant="secondary" className={colors[priority as keyof typeof colors] || colors.Low}>
+        {priority}
+      </Badge>
+    )
+  }
+
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    return (
+      date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    )
+  }
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+            <p className="text-gray-600">Loading conversations...</p>
+          </div>
+        </div>
+      </AppLayout>
+    )
   }
 
   return (
@@ -132,9 +260,36 @@ export default function ConversationsPage() {
               <MessageSquare className="h-6 w-6 text-blue-600 mr-3" />
               <h1 className="text-xl font-semibold text-gray-900">Conversations</h1>
             </div>
-            <div className="text-sm text-gray-500">{filteredConversations.length} conversations</div>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-500">{filteredConversations.length} conversations</div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center space-x-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                <span>Refresh</span>
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="px-6 py-4 bg-red-50 border-b border-red-200">
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {error}
+                <Button variant="outline" size="sm" onClick={handleRefresh} className="ml-2">
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
@@ -142,7 +297,7 @@ export default function ConversationsPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search conversations..."
+                placeholder="Search conversations, emails, or JIRA IDs..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -167,18 +322,34 @@ export default function ConversationsPage() {
         {/* Conversations List */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
-            <div className="space-y-4">
-              {paginatedConversations.map((conversation) => (
-                <Link key={conversation.id} href={`/conversations/${conversation.id}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            {paginatedConversations.length === 0 ? (
+              <div className="text-center py-12">
+                <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No conversations found</h3>
+                <p className="text-gray-500">
+                  {searchTerm || statusFilter !== "all"
+                    ? "Try adjusting your search or filter criteria"
+                    : "No conversations available"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {paginatedConversations.map((conversation) => (
+                  <Card key={conversation.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
                             <h3 className="text-lg font-medium text-gray-900">{conversation.title}</h3>
                             {getStatusBadge(conversation.status)}
+                            {getPriorityBadge(conversation.priority)}
                           </div>
-                          <p className="text-sm text-gray-600 mb-3">{conversation.summary}</p>
+                          
+                          {/* Render parameters nicely */}
+                          <div className="mb-3">
+                            {renderParameters(conversation.parameters)}
+                          </div>
+
                           <div className="flex items-center space-x-6 text-xs text-gray-500">
                             <div className="flex items-center">
                               <Calendar className="h-3 w-3 mr-1" />
@@ -192,18 +363,36 @@ export default function ConversationsPage() {
                               <MessageSquare className="h-3 w-3 mr-1" />
                               {conversation.messageCount} messages
                             </div>
+                            {conversation.jiraId && (
+                              <div className="flex items-center">
+                                <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                  {conversation.jiraId}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-2 text-xs text-gray-400">
+                            Email: {conversation.emailId}
+                            {conversation.module && <span className="ml-4">Module: {conversation.module}</span>}
                           </div>
                         </div>
                         <div className="flex items-center">
-                          <span className="text-xs text-gray-400 mr-2">ID: {conversation.id}</span>
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                          <Link href={`/conversations/${conversation.id}`} onClick={() => {
+                            // Store the conversation ID in localStorage for the view page
+                            localStorage.setItem('current-conversation-id', conversation.id);
+                          }}>
+                            <Button variant="ghost" size="sm" className="flex items-center space-x-1">
+                              <span className="text-xs text-gray-400">View</span>
+                              <ChevronRight className="h-4 w-4 text-gray-400" />
+                            </Button>
+                          </Link>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                </Link>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {/* Pagination */}
             {totalPages > 1 && (
