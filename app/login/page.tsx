@@ -28,9 +28,9 @@ export default function LoginPage() {
       "chatops-user",
       JSON.stringify({
         id: "1",
-        username: "jhon.doe",
-        email: "john.doe@example.com",
-        role: "DevOps Engineer",
+        username: "Adarsh",
+        email: "adarsh.b@bigbasket.com",
+        role: "Platform Engineer",
       }),
     )
 

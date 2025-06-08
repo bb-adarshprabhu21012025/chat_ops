@@ -158,7 +158,7 @@ export default function ConversationsPage() {
     }
   }, [])
   const storedUser = localStorage.getItem("chatops-user")
-  const email = storedUser ? JSON.parse(storedUser).email : "john.joe@example.com"
+  const email = storedUser ? JSON.parse(storedUser).email : "adarsh.b@bigbasket.com"
 
   const loadConversations = async () => {
     try {
@@ -373,16 +373,16 @@ export default function ConversationsPage() {
                           </div>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {conversation.parameters.approvals.em && (
-                              <Badge variant="outline" className="bg-blue-50">EM Approval</Badge>
+                              <Badge variant="outline" className="bg-blue-50">EM Approved</Badge>
                             )}
                             {conversation.parameters.approvals.elt && (
-                              <Badge variant="outline" className="bg-green-50">ELT Approval</Badge>
+                              <Badge variant="outline" className="bg-green-50">ELT Approved</Badge>
                             )}
                             {conversation.parameters.approvals.data && (
-                              <Badge variant="outline" className="bg-purple-50">Data Approval</Badge>
+                              <Badge variant="outline" className="bg-purple-50">Data Approved</Badge>
                             )}
                             {conversation.parameters.approvals.security && (
-                              <Badge variant="outline" className="bg-red-50">Security Approval</Badge>
+                              <Badge variant="outline" className="bg-red-50">Security Approved</Badge>
                             )}
                           </div>
                         </div>

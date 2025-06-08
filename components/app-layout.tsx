@@ -37,7 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Logo */}
           <div className="flex items-center px-6 py-4 border-b border-gray-200">
             <Terminal className="h-8 w-8 text-blue-600" />
-            <span className="ml-2 text-xl font-semibold text-gray-900">ChatOps</span>
+            <span className="ml-2 text-xl font-semibold text-gray-900">Kernos</span>
           </div>
 
           {/* Navigation */}
