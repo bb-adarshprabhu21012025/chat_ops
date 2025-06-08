@@ -39,6 +39,7 @@ interface ConversationData {
   conversation: {
     topic: string
     summary: string
+    conversation?: { content: string }[]
   }
   status_of_conversation: string
   template_id: number
@@ -82,30 +83,36 @@ function renderParameters(obj: any, level = 0): React.ReactNode {
 }
 
 // Transform API data to internal Conversation object
-const transformConversationData = (data: ConversationData): Conversation => ({
-  id: data.conversation_id.toString(),
-  title: data.conversation.topic,
-  createdAt: new Date(), // API doesn't provide dates
-  lastActivity: new Date(),
-  messageCount: 0,
-  status: data.status_of_conversation.toLowerCase() as "active" | "completed" | "error",
-  summary: data.conversation.summary,
-  priority: data.priority,
-  jiraId: data.jira_id,
-  emailId: data.email_id,
-  module: data.conversation.topic,
-  parameters: {
-    jenkinsJobId: data.jenkins_job_id,
-    jiraStatus: data.status_of_jira,
-    approvals: {
-      em: data.em_approval_status,
-      elt: data.elt_approval_status,
-      data: data.data_approval_status,
-      security: data.security_approval_status,
-      final: data.all_approval_final_status
+const transformConversationData = (data: ConversationData): Conversation => {
+  if (!data || !data.conversation) {
+    throw new Error('Invalid conversation data')
+  }
+  
+  return {
+    id: data.conversation_id.toString(),
+    title: data.jira_id || 'No JIRA',
+    createdAt: new Date(), // API doesn't provide dates
+    lastActivity: new Date(),
+    messageCount: data.conversation.conversation?.length || 0,
+    status: (data.status_of_conversation || 'active').toLowerCase() as "active" | "completed" | "error",
+    summary: '',
+    priority: data.priority || 'Low',
+    jiraId: data.jira_id,
+    emailId: data.email_id,
+    module: '',
+    parameters: {
+      jenkinsJobId: data.jenkins_job_id,
+      jiraStatus: data.status_of_jira,
+      approvals: {
+        em: data.em_approval_status,
+        elt: data.elt_approval_status,
+        data: data.data_approval_status,
+        security: data.security_approval_status,
+        final: data.all_approval_final_status
+      }
     }
   }
-})
+}
 
 // Fetch conversations from API
 const fetchConversations = async (params?: { email_id?: string; conversation_id?: string }): Promise<Conversation[]> => {
@@ -340,14 +347,11 @@ export default function ConversationsPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-lg font-medium text-gray-900">{conversation.title}</h3>
+                            <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                              {conversation.jiraId || 'No JIRA'}
+                            </span>
                             {getStatusBadge(conversation.status)}
                             {getPriorityBadge(conversation.priority)}
-                          </div>
-                          
-                          {/* Render parameters nicely */}
-                          <div className="mb-3">
-                            {renderParameters(conversation.parameters)}
                           </div>
 
                           <div className="flex items-center space-x-6 text-xs text-gray-500">
@@ -363,22 +367,27 @@ export default function ConversationsPage() {
                               <MessageSquare className="h-3 w-3 mr-1" />
                               {conversation.messageCount} messages
                             </div>
-                            {conversation.jiraId && (
-                              <div className="flex items-center">
-                                <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
-                                  {conversation.jiraId}
-                                </span>
-                              </div>
-                            )}
                           </div>
                           <div className="mt-2 text-xs text-gray-400">
                             Email: {conversation.emailId}
-                            {conversation.module && <span className="ml-4">Module: {conversation.module}</span>}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {conversation.parameters.approvals.em && (
+                              <Badge variant="outline" className="bg-blue-50">EM Approval</Badge>
+                            )}
+                            {conversation.parameters.approvals.elt && (
+                              <Badge variant="outline" className="bg-green-50">ELT Approval</Badge>
+                            )}
+                            {conversation.parameters.approvals.data && (
+                              <Badge variant="outline" className="bg-purple-50">Data Approval</Badge>
+                            )}
+                            {conversation.parameters.approvals.security && (
+                              <Badge variant="outline" className="bg-red-50">Security Approval</Badge>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center">
                           <Link href={`/conversations/${conversation.id}`} onClick={() => {
-                            // Store the conversation ID in localStorage for the view page
                             localStorage.setItem('current-conversation-id', conversation.id);
                           }}>
                             <Button variant="ghost" size="sm" className="flex items-center space-x-1">
